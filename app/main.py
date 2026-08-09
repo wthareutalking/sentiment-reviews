@@ -1,19 +1,30 @@
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.db import engine
 from sqlalchemy import text
+from app.db import engine
 from app.api.parse import router as parse_router
 from app.api.analytics import router as analytics_router
 from app.api.search import router as search_router
 from app.elastic import init_es
 from prometheus_fastapi_instrumentator import Instrumentator
 
-app = FastAPI(title="SentimentReviews", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Код при запуске
+    try:
+        init_es()
+        logger.info("Elasticsearch инициализирован")
+    except Exception as e:
+        logger.error(f"Не удалось инициализировать Elasticsearch: {e}")
+    yield
+    # Код при завершении (если нужно)
+
+app = FastAPI(title="SentimentReviews", version="0.1.0", lifespan=lifespan)
 
 Instrumentator().instrument(app).expose(app)
-
-@app.on_event("startup")
-async def startup():
-    init_es()
 
 app.include_router(parse_router)
 app.include_router(analytics_router)
